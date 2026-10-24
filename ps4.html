@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thunder Stream - PS4 Ultimate Edition</title>
+    <!-- HLS.js con soporte robusto -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        :root {
+            --ps-blue: #00439c;
+            --ps-glow: #0072ce;
+            --ps-light-glow: #00a0e9;
+            --ps-bg-end: #030814;
+            --ps-text: #e6e6e6;
+        }
+
+        body {
+            background: radial-gradient(circle at 50% 30%, #102a56 0%, var(--ps-bg-end) 100%);
+            color: var(--ps-text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .bg-wave {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, rgba(0,114,206,0.15) 0%, rgba(0,0,0,0) 70%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        #app-container {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+            padding: 25px 40px;
+            justify-content: space-between;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 50px;
+            color: #a0aab8;
+        }
+
+        .ps-status-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .ps-logo {
+            font-weight: 800;
+            font-size: 18px;
+            color: #ffffff;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ps-status-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .clock {
+            font-size: 16px;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .search-box input {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 6px 15px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+            width: 180px;
+            transition: all 0.2s ease;
+        }
+
+        .search-box input:focus {
+            width: 260px;
+            background: rgba(255, 255, 255, 0.25);
+            border-color: var(--ps-light-glow);
+            box-shadow: 0 0 10px rgba(0, 160, 233, 0.5);
+        }
+
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            margin-top: -30px;
+        }
+
+        .category-label {
+            font-size: 14px;
+            color: var(--ps-light-glow);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .carousel-container {
+            display: flex;
+            gap: 18px;
+            overflow-x: auto;
+            padding: 20px 5px;
+            scroll-behavior: smooth;
+            scrollbar-width: none;
+        }
+
+        .carousel-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        .ps-tile {
+            min-width: 140px;
+            max-width: 140px;
+            height: 140px;
+            background: rgba(15, 25, 45, 0.65);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            outline: none;
+            position: relative;
+            transition: transform 0.15s cubic-bezier(0.2, 0, 0.2, 1), border-color 0.15s, box-shadow 0.15s;
+            will-change: transform;
+            contain: content;
+        }
+
+        .ps-tile-icon {
+            width: 65px;
+            height: 65px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .ps-tile-icon img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .ps-tile-title {
+            position: absolute;
+            bottom: -35px;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            font-size: 13px;
+            color: #fff;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            font-weight: 500;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+
+        .ps-tile:focus, .ps-tile.focused {
+            transform: scale(1.18);
+            border-color: #ffffff;
+            background: rgba(20, 60, 120, 0.85);
+            box-shadow: 0 0 25px rgba(0, 160, 233, 0.8), 0 8px 20px rgba(0,0,0,0.6);
+            z-index: 10;
+        }
+
+        .ps-tile:focus .ps-tile-title, .ps-tile.focused .ps-tile-title {
+            opacity: 1;
+        }
+
+        .channel-details-bar {
+            height: 50px;
+            margin-top: 35px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .channel-details-bar .badge {
+            background: var(--ps-blue);
+            color: #fff;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 2px;
+        }
+
+        .channel-details-bar .title {
+            font-size: 18px;
+            font-weight: 400;
+            color: #fff;
+        }
+
+        footer {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 25px;
+            height: 40px;
+            font-size: 13px;
+            color: #8a93b0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 10px;
+        }
+
+        .ds-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            color: #fff;
+            font-size: 11px;
+            font-weight: bold;
+            margin-right: 6px;
+        }
+
+        .btn-cross { background: #5882c4; }
+        .btn-circle { background: #e55342; }
+        .btn-triangle { background: #47b286; }
+
+        #player-container {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background-color: #000;
+            z-index: 99999;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        #loading-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--ps-bg-end);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 900;
+        }
+
+        .ps-spinner {
+            width: 45px;
+            height: 45px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: var(--ps-light-glow);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        .close-player-btn {
+            position: absolute;
+            top: 25px; right: 25px;
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            z-index: 100000;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg-wave"></div>
+
+    <div id="app-container">
+        <header>
+            <div class="ps-status-left">
+                <div class="ps-logo"><span>⚡</span> THUNDER TV</div>
+                <div class="ps-status-item" id="status-text">Cargando listas...</div>
+            </div>
+            <div class="ps-status-right">
+                <div class="search-box">
+                    <input type="text" id="search-input" placeholder="🔍 Buscar canales..." tabindex="1">
+                </div>
+                <div class="clock" id="ps-clock">00:00</div>
+            </div>
+        </header>
+
+        <main>
+            <div class="category-label" id="category-title">EMISIONES DISPONIBLES</div>
+            
+            <div class="carousel-container" id="carousel"></div>
+
+            <div class="channel-details-bar">
+                <span class="badge">DIRECTO</span>
+                <span class="title" id="focused-title">Cargando canales...</span>
+            </div>
+        </main>
+
+        <footer>
+            <div><span class="ds-btn btn-cross">X</span> Seleccionar</div>
+            <div><span class="ds-btn btn-circle">O</span> Atrás</div>
+            <div><span class="ds-btn btn-triangle">△</span> Buscar</div>
+        </footer>
+    </div>
+
+    <div id="loading-overlay">
+        <div class="ps-spinner"></div>
+        <p style="margin-top: 18px; color: #a0aab8; font-size: 14px;">Cargando todas las fuentes de emisión...</p>
+    </div>
+
+    <div id="player-container">
+        <button class="close-player-btn" id="close-player"><span class="ds-btn btn-circle">O</span> Volver (ESC)</button>
+        <video id="video-player" controls autoplay playsinline></video>
+    </div>
+
+    <script>
+        // Listas completas configuradas por ti
+        const PLAYLIST_SOURCES = [
+            { url: "https://www.tdtchannels.com/lists/tv.json", type: "json" },
+            { url: "https://raw.githubusercontent.com/TDTSP/tdtsp.github.io/refs/heads/main/canal.json", type: "json" },
+            { url: "https://raw.githubusercontent.com/Paradise-91/ParaTV/07f1d3fb4e98a7262561b41a2790ef39c15f2cb2/playlists/samsungtvplus/group/es/es.m3u", type: "m3u" },
+            { url: "https://raw.githubusercontent.com/JMigue85/IPTV-SV/3b013835231e1a115fc2e30e9b18bc98df1bf18b/PlutoTV.ES.m3u", type: "m3u" },
+            { url: "https://raw.githubusercontent.com/Free-TV/IPTV/refs/heads/master/playlists/playlist_spain.m3u8", type: "m3u" },
+            { url: "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8", type: "m3u" },
+            { url: "https://raw.githubusercontent.com/Llorchico/LG/refs/heads/main/eslg.m3u", type: "m3u" }
+        ];
+
+        let allChannels = [];
+        let filteredChannels = [];
+        let hlsInstance = null;
+        let activeIndex = 0;
+
+        const carousel = document.getElementById('carousel');
+        const searchInput = document.getElementById('search-input');
+        const statusText = document.getElementById('status-text');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const playerContainer = document.getElementById('player-container');
+        const videoPlayer = document.getElementById('video-player');
+        const closePlayerBtn = document.getElementById('close-player');
+        const focusedTitle = document.getElementById('focused-title');
+        const psClock = document.getElementById('ps-clock');
+
+        function updateClock() {
+            const now = new Date();
+            psClock.innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        async function fetchPlaylist(source) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+                const res = await fetch(source.url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (!res.ok) return;
+
+                if (source.type === 'json') {
+                    const data = await res.json();
+                    parseJSON(data);
+                } else {
+                    const text = await res.text();
+                    parseM3U(text);
+                }
+            } catch (err) {
+                console.warn(`Aviso: Fuente omitida temporalmente [${source.url}]`);
+            }
+        }
+
+        async function loadAllPlaylists() {
+            await Promise.allSettled(PLAYLIST_SOURCES.map(source => fetchPlaylist(source)));
+
+            // Filtrar duplicados exactos y enlaces inválidos
+            const uniqueUrls = new Set();
+            allChannels = allChannels.filter(ch => {
+                if (!ch.url || !ch.url.startsWith("http") || uniqueUrls.has(ch.url)) return false;
+                uniqueUrls.add(ch.url);
+                return true;
+            });
+
+            loadingOverlay.style.display = 'none';
+            statusText.innerText = `✓ ${allChannels.length} Canales listos`;
+            filteredChannels = [...allChannels];
+            renderCarousel();
+        }
+
+        // Parseador inteligente adaptado para JSONs generales y personalizados como TDTSP
+        function parseJSON(data) {
+            if (!data) return;
+
+            // Estructura TDTChannels / estándar
+            if (data.countries) {
+                data.countries.forEach(country => {
+                    (country.ambits || []).forEach(ambit => {
+                        (ambit.channels || []).forEach(ch => {
+                            (ch.options || []).forEach((opt, idx) => {
+                                if (opt.url && opt.url.startsWith("http")) {
+                                    allChannels.push({
+                                        name: ch.options.length > 1 ? `${ch.name} (${idx + 1})` : ch.name,
+                                        url: opt.url,
+                                        logo: ch.logo || null
+                                    });
+                                }
+                            });
+                        });
+                    });
+                });
+            }
+
+            // Estructura plana de arrays o propiedades directas (ej. TDTSP)
+            if (Array.isArray(data)) {
+                data.forEach(item => {
+                    if (item.url && item.url.startsWith("http")) {
+                        allChannels.push({
+                            name: item.name || item.title || "Canal",
+                            url: item.url,
+                            logo: item.logo || item.tvg_logo || null
+                        });
+                    }
+                });
+            } else if (typeof data === 'object' && data !== null) {
+                // Si viene estructurado dentro de objetos o categorías
+                Object.values(data).forEach(val => {
+                    if (Array.isArray(val)) {
+                        val.forEach(item => {
+                            if (item.url && item.url.startsWith("http")) {
+                                allChannels.push({
+                                    name: item.name || item.title || "Canal",
+                                    url: item.url,
+                                    logo: item.logo || item.tvg_logo || null
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+        }
+
+        function parseM3U(text) {
+            if (!text) return;
+            const lines = text.split('\n');
+            let currentName = '', currentLogo = null;
+
+            lines.forEach(line => {
+                line = line.trim();
+                if (line.startsWith('#EXTINF:')) {
+                    const logoMatch = line.match(/tvg-logo="([^"]+)"/);
+                    currentLogo = logoMatch ? logoMatch[1] : null;
+                    const nameParts = line.split(',');
+                    currentName = nameParts.length > 1 ? nameParts[nameParts.length - 1].trim() : 'Canal Directo';
+                } else if (line.startsWith('http') && currentName) {
+                    allChannels.push({
+                        name: currentName,
+                        url: line,
+                        logo: currentLogo
+                    });
+                    currentName = '';
+                }
+            });
+        }
+
+        function renderCarousel() {
+            carousel.innerHTML = '';
+            if (filteredChannels.length === 0) {
+                focusedTitle.innerText = "No se han encontrado canales";
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+
+            filteredChannels.forEach((ch, idx) => {
+                const tile = document.createElement('div');
+                tile.className = 'ps-tile';
+                tile.setAttribute('tabindex', '0');
+
+                const initial = ch.name ? ch.name[0].toUpperCase() : '?';
+                const logoHtml = ch.logo 
+                    ? `<img src="${ch.logo}" alt="" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;">${initial}</span>`
+                    : `<span>${initial}</span>`;
+
+                tile.innerHTML = `
+                    <div class="ps-tile-icon">${logoHtml}</div>
+                    <div class="ps-tile-title">${ch.name}</div>
+                `;
+
+                tile.addEventListener('focus', () => updateFocus(idx));
+                tile.addEventListener('click', () => playStream(ch.url));
+
+                fragment.appendChild(tile);
+            });
+
+            carousel.appendChild(fragment);
+
+            setTimeout(() => {
+                if (carousel.children[0]) {
+                    carousel.children[0].focus();
+                }
+            }, 50);
+        }
+
+        function updateFocus(index) {
+            activeIndex = index;
+            const channel = filteredChannels[activeIndex];
+            if (channel) {
+                focusedTitle.innerText = channel.name;
+            }
+
+            const focusedElem = carousel.children[index];
+            if (focusedElem) {
+                focusedElem.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            }
+        }
+
+        searchInput.addEventListener('input', (e) => {
+            const q = e.target.value.toLowerCase().trim();
+            filteredChannels = allChannels.filter(ch => ch.name.toLowerCase().includes(q));
+            renderCarousel();
+        });
+
+        // Motor HLS Instantáneo con Pantalla Completa
+        function playStream(url) {
+            playerContainer.style.display = 'block';
+            
+            const docElm = document.documentElement;
+            if (docElm.requestFullscreen) {
+                docElm.requestFullscreen().catch(() => {});
+            } else if (docElm.webkitRequestFullscreen) {
+                docElm.webkitRequestFullscreen();
+            }
+
+            if (Hls.isSupported()) {
+                if (hlsInstance) hlsInstance.destroy();
+                hlsInstance = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    maxBufferLength: 6,
+                    maxMaxBufferLength: 12,
+                    maxBufferSize: 25 * 1024 * 1024
+                });
+                hlsInstance.loadSource(url);
+                hlsInstance.attachMedia(videoPlayer);
+                hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+                    videoPlayer.play().catch(() => {});
+                });
+                
+                hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hlsInstance.startLoad();
+                        else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInstance.recoverMediaError();
+                    }
+                });
+            } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                videoPlayer.src = url;
+                videoPlayer.play().catch(() => {});
+            }
+
+            closePlayerBtn.focus();
+        }
+
+        function stopStream() {
+            if (hlsInstance) {
+                hlsInstance.destroy();
+                hlsInstance = null;
+            }
+            videoPlayer.pause();
+            videoPlayer.src = "";
+            playerContainer.style.display = 'none';
+
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+
+            if (carousel.children[activeIndex]) {
+                carousel.children[activeIndex].focus();
+            }
+        }
+
+        closePlayerBtn.addEventListener('click', stopStream);
+
+        document.addEventListener('keydown', (e) => {
+            const tiles = carousel.children;
+
+            if (playerContainer.style.display === 'block') {
+                if (e.key === 'Escape' || e.key === 'Backspace' || e.keyCode === 10009) {
+                    stopStream();
+                    e.preventDefault();
+                }
+                return;
+            }
+
+            if (document.activeElement === searchInput) {
+                if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                    if (tiles.length > 0) tiles[0].focus();
+                }
+                return;
+            }
+
+            switch (e.key) {
+                case 'ArrowRight':
+                    if (activeIndex < tiles.length - 1) tiles[activeIndex + 1].focus();
+                    break;
+                case 'ArrowLeft':
+                    if (activeIndex > 0) tiles[activeIndex - 1].focus();
+                    break;
+                case 'ArrowUp':
+                    searchInput.focus();
+                    break;
+                case 'Enter':
+                    if (tiles[activeIndex]) tiles[activeIndex].click();
+                    break;
+                case 'Escape':
+                case 'Backspace':
+                    if (searchInput.value !== '') {
+                        searchInput.value = '';
+                        filteredChannels = [...allChannels];
+                        renderCarousel();
+                    }
+                    break;
+            }
+        });
+
+        let lastPadState = {};
+        function pollGamepad() {
+            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+            const gp = gamepads[0];
+
+            if (gp) {
+                if (gp.buttons[14].pressed && !lastPadState[14]) window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+                if (gp.buttons[15].pressed && !lastPadState[15]) window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+                if (gp.buttons[12].pressed && !lastPadState[12]) window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp' }));
+                if (gp.buttons[13].pressed && !lastPadState[13]) window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+                if (gp.buttons[0].pressed && !lastPadState[0]) window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+                if (gp.buttons[1].pressed && !lastPadState[1]) window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+                if (gp.buttons[3].pressed && !lastPadState[3]) searchInput.focus();
+
+                gp.buttons.forEach((b, idx) => { lastPadState[idx] = b.pressed; });
+            }
+            requestAnimationFrame(pollGamepad);
+        }
+
+        window.addEventListener("gamepadconnected", () => {
+            statusText.innerText = "🎮 Mando DualShock Conectado";
+        });
+
+        loadAllPlaylists();
+        requestAnimationFrame(pollGamepad);
+    </script>
+</body>
+</html>
